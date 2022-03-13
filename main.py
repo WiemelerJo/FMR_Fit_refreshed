@@ -29,7 +29,9 @@ class MyForm(QMainWindow):
         self.Button_remove_function.clicked.connect(self.remove_func)
 
         self.pushButton.clicked.connect(self.test)
-        self.func_count = 0
+
+        self.func_number = 1
+        self.func_removed = []
 
         self.populate_combobox()
 
@@ -49,24 +51,34 @@ class MyForm(QMainWindow):
         # Get func name from combobox and add it to self.funcs
         name = self.comboBox_fit_model.currentText()
         #self.funcs.append(name)
-        self.populate_tree(name)
+        number = self.func_number
+        self.func_number += 1
+        if self.func_removed:
+            self.func_number -= 1
+            self.func_removed.sort()
+            number = self.func_removed[0]
+            self.func_removed.pop(0)
+
+        self.populate_tree(name, number)
 
     def remove_func(self):
         # Get selected Item/Function to remove
         tree = self.Parameter_tree
         root = tree.invisibleRootItem()
         for item in tree.selectedItems():
+            name = item.text(0)
+            index = name.split(" ")[1]
+            self.func_removed.append(index)
             root.removeChild(item)
             root.removeChild(item.parent())
 
-    def populate_tree(self, func_name: str):
+    def populate_tree(self, func_name: str, number: int):
         tree = self.Parameter_tree
 
-        self.func_count += 1
         Model = self.Models.MODELS.get(func_name)
 
         parent = QTreeWidgetItem(tree)
-        parent.setText(0, func_name + ' {}'.format(self.func_count))
+        parent.setText(0, func_name + ' {}'.format(number))
         parent.setFlags(parent.flags() | Qt.ItemIsTristate | Qt.ItemIsUserCheckable)
 
         for index, param in enumerate(Model['args']):
