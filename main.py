@@ -69,26 +69,37 @@ class MyForm(QMainWindow):
         parent.setText(0, func_name + ' {}'.format(self.func_count))
         parent.setFlags(parent.flags() | Qt.ItemIsTristate | Qt.ItemIsUserCheckable)
 
-        for param in Model['args']:
+        for index, param in enumerate(Model['args']):
             child = QTreeWidgetItem(parent)
             child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
             child.setText(0, param)
             child.setCheckState(0, Qt.Checked)
 
-            stepsize_list = [0.001, 10 * 0.001, 10 * 0.001]
-            min_list = [0.0, 0.0 - 1.5, 0.0 - 1.5]
-            max_list = [1.5, 1.5 + 1.5, 1.5 + 1.5]
-            val_list = [0.005, 0.0, 1.5]
+            Stepsize_list = Model.get('stepSize')
+            step = Stepsize_list[index]
+            steps = [step, 10 * step, 10 * step]
+
+            Bounds = Model.get('bounds')
+            min = Bounds[index][0]
+            max = Bounds[index][1]
+
+            boundsMin = [min, -2 * abs(max), -2 * abs(max)]
+            boundsMax = [max, 2 * max, 2 * max]
+
+            Val_list = Model.get('initVals')
+            val = Val_list[index]
+            value = [val, min, max]
+
             signal_list = [self.dbs_value, self.dbs_bound_min, self.dbs_bound_max]
 
             for col in range(3):
                 dbs = QDoubleSpinBox()
                 dbs.setDecimals(6)
 
-                dbs.setSingleStep(stepsize_list[col])
-                dbs.setMinimum(min_list[col])
-                dbs.setMaximum(max_list[col])
-                dbs.setValue(val_list[col])
+                dbs.setSingleStep(steps[col])
+                dbs.setRange(boundsMin[col], boundsMax[col])
+                dbs.setValue(value[col])
+
                 dbs.valueChanged.connect(signal_list[col])
 
                 tree.setItemWidget(child, col + 1, dbs)
@@ -96,8 +107,8 @@ class MyForm(QMainWindow):
     def dbs_value(self, *args):
         print(args)
 
-    def dbs_bound_min(self, *args):
-        print(args)
+    def dbs_bound_min(self, *args, **kwargs):
+        print(args, kwargs)
 
     def dbs_bound_max(self, *args):
         print(args)

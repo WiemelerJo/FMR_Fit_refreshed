@@ -42,6 +42,7 @@ class Gen_Dyson():
 #exec(model,globals())   # excecute to python function in global namespace
 
 class Fit_Models():
+    # Todo: Make MODELS as Object; Args, Bounds, Stepsize... as property
     def __init__(self):
         self.load_models()
 
@@ -61,17 +62,29 @@ class Fit_Models():
                     args = line[6:-1]
                     args_fmt = args.replace(",", r"{0}") + r"{0}"
                     args_fmt = ", " + args_fmt.replace(" ", ", ")
-                    model["args"] = args
+                    model["args"] = args.split(",")
                     model["args_fmt"] = args_fmt
                     #print(args)
                 elif line[:6] == "Bounds":
                     bounds_raw = line[8:-1].split(", ")
                     bounds = []
                     for tpl in bounds_raw:
-                        tpl = eval(tpl.replace('Nan', 'm.inf').replace('nan', 'm.inf').replace('NaN', 'm.inf').replace('NAN', 'm.inf'))
+                        big = "9999999999"
+                        tpl = eval(tpl.replace('Nan', big).replace('nan', big).replace('NaN', big).replace('NAN', big))
                         bounds.append(tpl)
                     model["bounds"] = bounds
-
+                elif line[:8] == "StepSize":
+                    step_raw = line[9:-1].split(", ")
+                    step = []
+                    for stp in step_raw:
+                        step.append(float(stp))
+                    model["stepSize"] = step
+                elif line[:8] == "InitVals":
+                    init_raw = line[9:-1].split(", ")
+                    init = []
+                    for nt in init_raw:
+                        init.append(float(nt))
+                    model["initVals"] = init
                 elif line[:4] == "Func": # Function
                     func = line[10:]
                     arg = args.split(", ")
