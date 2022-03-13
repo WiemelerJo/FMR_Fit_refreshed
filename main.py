@@ -4,7 +4,8 @@ import numpy as np
 import math as m
 import pyqtgraph as pg
 
-from PyQt5.QtWidgets import QMainWindow, QApplication,QFileDialog, QCheckBox, QLabel, QMessageBox, QShortcut
+from PyQt5.QtWidgets import QMainWindow, QApplication,QFileDialog, QCheckBox, QLabel, QMessageBox, QShortcut,\
+    QTreeWidgetItem, QDoubleSpinBox
 from PyQt5.QtCore import QThread, pyqtSignal, QSignalBlocker
 from PyQt5.Qt import Qt, QUrl, QDesktopServices
 from PyQt5.QtGui import QKeySequence
@@ -12,6 +13,7 @@ from PyQt5.uic import loadUi
 
 from lib.CustomWidgets import *
 from lib.Fitting import *
+from tools.func_gen import Fit_Models
 
 class MyForm(QMainWindow):
     def __init__(self):
@@ -23,9 +25,82 @@ class MyForm(QMainWindow):
         #self.actionSave.triggered.connect(self.saveFileDialog)
         #self.actionExit.triggered.connect(self.Exit)
 
+        self.Button_add_function.clicked.connect(self.add_func)
+        self.Button_remove_function.clicked.connect(self.remove_func)
+
+        self.pushButton.clicked.connect(self.test)
+        self.func_count = 0
+
+        self.populate_combobox()
+
+
+    def test(self, *args, **kwargs):
+        print(self.Models.MODELS.get('Lorentz'))
+
     def changeSpectra(self, spectra: int):
         self.i = spectra
         self.plot()
+
+    def populate_combobox(self):
+        self.Models = Fit_Models()
+        self.comboBox_fit_model.addItems(list(self.Models.MODELS.keys()))
+
+    def add_func(self):
+        # Get func name from combobox and add it to self.funcs
+        name = self.comboBox_fit_model.currentText()
+        #self.funcs.append(name)
+        self.populate_tree(name)
+
+    def remove_func(self):
+        # Get selected Item/Function to remove
+        tree = self.Parameter_tree
+        root = tree.invisibleRootItem()
+        for item in tree.selectedItems():
+            root.removeChild(item)
+            root.removeChild(item.parent())
+
+    def populate_tree(self, func_name: str):
+        tree = self.Parameter_tree
+
+        self.func_count += 1
+        Model = self.Models.MODELS.get(func_name)
+
+        parent = QTreeWidgetItem(tree)
+        parent.setText(0, func_name + ' {}'.format(self.func_count))
+        parent.setFlags(parent.flags() | Qt.ItemIsTristate | Qt.ItemIsUserCheckable)
+
+        for param in Model['args']:
+            child = QTreeWidgetItem(parent)
+            child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
+            child.setText(0, param)
+            child.setCheckState(0, Qt.Checked)
+
+            stepsize_list = [0.001, 10 * 0.001, 10 * 0.001]
+            min_list = [0.0, 0.0 - 1.5, 0.0 - 1.5]
+            max_list = [1.5, 1.5 + 1.5, 1.5 + 1.5]
+            val_list = [0.005, 0.0, 1.5]
+            signal_list = [self.dbs_value, self.dbs_bound_min, self.dbs_bound_max]
+
+            for col in range(3):
+                dbs = QDoubleSpinBox()
+                dbs.setDecimals(6)
+
+                dbs.setSingleStep(stepsize_list[col])
+                dbs.setMinimum(min_list[col])
+                dbs.setMaximum(max_list[col])
+                dbs.setValue(val_list[col])
+                dbs.valueChanged.connect(signal_list[col])
+
+                tree.setItemWidget(child, col + 1, dbs)
+
+    def dbs_value(self, *args):
+        print(args)
+
+    def dbs_bound_min(self, *args):
+        print(args)
+
+    def dbs_bound_max(self, *args):
+        print(args)
 
     def openFileDialog(self):
         fname = QFileDialog.getOpenFileName(self, 'Open file', '/home', 'Converted Files (*.txt *.dat *.asc) ;;'
@@ -75,7 +150,7 @@ class MyForm(QMainWindow):
 
         # { i: {Ampl: [amplitude data], Field: [field data], Angle: [angle data],
         #   models: [Lorentz1, Dyson2, Lorentz3, ...],
-        #   params: [fitted params/values of Qdoublespinbox]
+        #   params: [fitted params/values of Qdoublespinbox as lmfit Parameter object]
         #   }   }
 
         self.paramsLUT = {}
@@ -98,6 +173,15 @@ class MyForm(QMainWindow):
 
         self.Plot_Indi_View.plt.addItem(self.Plot_Indi_View.lr)  # Plot Linear Range Select Item
         self.Plot_Indi_View.plt.addItem(self.Plot_Indi_View.label, ignoreBounds=True)
+
+        params = data.get('params')
+
+        if params == None or params == False:
+            # No fit to plot, so end call here
+            return
+
+        # Now get the values out of lmfit Parameter object
+
 
     def first_guess(self, fit_range: tuple, exceptions: list) -> list:
         # Iterate over all spectras and extract approx parameters, to use as initial starting points for lineshape 1

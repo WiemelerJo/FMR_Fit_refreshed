@@ -49,7 +49,7 @@ class Fit_Models():
         # Loads a .txt file where the models are stored
         MODELS = dict()
 
-        with open("../lib/Models.txt", 'r') as file:
+        with open("lib/Models.txt", 'r') as file:
             model = dict()
             #i = 0
             for line in file:
