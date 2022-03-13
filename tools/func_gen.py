@@ -1,6 +1,8 @@
 # Skript for generating the Functions as a String
 # Idea is, these Classes should create and return a string which in the end via excec(....., globals()) can be turned
 # into a python function and in the end into a model for fitting using lmfit
+import math as m
+from asteval import asteval
 
 class Gen_Lorentz():
     def __init__(self,fit_num):
@@ -47,7 +49,7 @@ class Fit_Models():
         # Loads a .txt file where the models are stored
         MODELS = dict()
 
-        with open("lib/Models.txt", 'r') as file:
+        with open("../lib/Models.txt", 'r') as file:
             model = dict()
             #i = 0
             for line in file:
@@ -62,6 +64,14 @@ class Fit_Models():
                     model["args"] = args
                     model["args_fmt"] = args_fmt
                     #print(args)
+                elif line[:6] == "Bounds":
+                    bounds_raw = line[8:-1].split(", ")
+                    bounds = []
+                    for tpl in bounds_raw:
+                        tpl = eval(tpl.replace('Nan', 'm.inf').replace('nan', 'm.inf').replace('NaN', 'm.inf').replace('NAN', 'm.inf'))
+                        bounds.append(tpl)
+                    model["bounds"] = bounds
+
                 elif line[:4] == "Func": # Function
                     func = line[10:]
                     arg = args.split(", ")
@@ -117,6 +127,8 @@ class Fit_Models():
         func = "def model_fit_func(B, slope, offset{0}):\n\treturn({1} + {2})".format(str_func_args,str_body,str_end)
         return func
 
+if __name__ == '__main__':
+    Fit_Models()
 
 
 
