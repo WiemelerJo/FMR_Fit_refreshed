@@ -37,11 +37,15 @@ class MyForm(QMainWindow):
         self.func_number = 1
         self.func_removed = []
 
+        self.pltView = self.Plot_Indi_View
+        self.pltViewRange = self.Plot_Indi_View
+
         self.populate_combobox()
 
 
     def test(self, *args, **kwargs):
-        self.getValuesFromTree()
+        #self.getValuesFromTree()
+        self.plotFitData()
         #print(self.Models.MODELS.get('Lorentz'))
         #print(self.paramsLUT.get(self.i).get('params'))
         #for name in self.paramsLUT.get(self.i).get('params'):
@@ -51,6 +55,7 @@ class MyForm(QMainWindow):
     def changeSpectra(self, spectra: int):
         self.i = spectra
         self.plot()
+        self.plotFitData()
 
     def populate_combobox(self):
         self.Models = Fit_Models()
@@ -160,6 +165,8 @@ class MyForm(QMainWindow):
         root = self.Parameter_tree.invisibleRootItem()
         child_count = root.childCount()
         funcNames = []
+
+        #print(child_count)
 
         # get the names
         for i in range(child_count):
@@ -276,13 +283,15 @@ class MyForm(QMainWindow):
     def plotFitData(self):
         # Plot the fitted data + individual functions
         # This needs to be called for every change
-
         data = self.paramsLUT.get(self.i)
         H_data = data.get('Field')
         Ampl_data = data.get('Ampl')
 
         # j_min, j = self.getFitRegion()
         params = data.get('params')
+        if params == None or params == False:
+            # No fit to plot, so end call here
+            self.getValuesFromTree()
 
         # evaluate the fit model with given parameters params then plot
         fitted_data = data.get('models').eval(params=params, B=H_data)
@@ -290,7 +299,6 @@ class MyForm(QMainWindow):
         pen_result = pg.mkPen((255, 0, 0), width=3)
         self.pltFitData.setData(H_data, fitted_data, name='Result', pen=pen_result)
         self.pltFitDataRange.setData(H_data, fitted_data, name='Result', pen=pen_result)
-
 
     def plot(self):
         # Plot the Background/Experiment
@@ -301,8 +309,8 @@ class MyForm(QMainWindow):
         Ampl_data = data.get('Ampl')
 
         #j_min, j = self.getFitRegion()
-        view = self.Plot_Indi_View
-        view_range = self.Plot_Indi_View
+        view = self.pltView
+        view_range = self.pltViewRange
 
         view.plt.clear()  # Delete previous data
         view_range.plt_range.clear() # Delete previous data
@@ -313,17 +321,9 @@ class MyForm(QMainWindow):
         view.plt.addItem(view.lr)  # Plot Linear Range Select Item
         view.plt.addItem(view.label, ignoreBounds=True)
 
-        params = data.get('params')
-
-        if params == None or params == False:
-            # No fit to plot, so end call here
-            self.getValuesFromTree()
-            #return
-
-        # Prepare plots for fit data
-        self.pltFitData = view.plt.plot()
-        self.pltFitDataRange = view_range.plt_range.plot()
-        self.plotFitData()
+        # Init Objects for Fitted Data Plot
+        self.pltFitData = self.pltView.plt.plot()
+        self.pltFitDataRange = self.pltViewRange.plt_range.plot()
 
     def first_guess(self, fit_range: tuple, exceptions: list) -> list:
         # Iterate over all spectras and extract approx parameters, to use as initial starting points for lineshape 1
