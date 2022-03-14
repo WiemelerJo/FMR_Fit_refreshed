@@ -33,6 +33,7 @@ class MyForm(QMainWindow):
         self.Button_remove_function.clicked.connect(self.remove_func)
 
         self.pushButton.clicked.connect(self.test)
+        self.Button_Fit.clicked.connect(self.makeFit)
 
         self.func_number = 1
         self.func_removed = []
@@ -224,6 +225,7 @@ class MyForm(QMainWindow):
         func = self.Models.getModelFunc(names, self.i)
         # func[0] is the function string, func[1] is its reference, func[2] is func_args
         exec(func[0], globals()) # Create function
+        print(func[0])
 
         # with func[1] create lfmit Model()
         fit_model = Model(globals().get(func[1]))
@@ -300,10 +302,12 @@ class MyForm(QMainWindow):
 
         # j_min, j = self.getFitRegion()
         params = data.get('params')
-        if params == None or params == False:
+        if params == None:
             # No fit to plot, so end call here
             self.getValuesFromTree()
-
+        elif params == False:
+            # This means self.i is in exceptions and should not be plotted/fitted
+            return
         # evaluate the fit model with given parameters params then plot
         fitted_data = data.get('models').eval(params=params, B=H_data)
 
@@ -335,6 +339,31 @@ class MyForm(QMainWindow):
         # Init Objects for Fitted Data Plot
         self.pltFitData = self.pltView.plt.plot()
         self.pltFitDataRange = self.pltViewRange.plt_range.plot()
+
+    def getFitRegion(self):
+        # Get the width of this blue moveable region in the main plot
+        region = self.pltViewRange.lr.getRegion()
+        return int(float(region[0]) * self.H_ratio + self.H_offset),\
+               int(float(region[1]) * self.H_ratio + self.H_offset)
+
+    def makeFit(self):
+        # Take current spectra, params file and model entry to make a fit
+        self.getValuesFromTree()
+
+        data = self.paramsLUT.get(self.i)
+        params = data.get('params')
+        if params == False:
+            #  If true, self.i is in exeptions and should not be fitted
+            return
+
+        H_data = data.get('Field')
+        Ampl_data = data.get('Ampl')
+        model = data.get('models')
+
+        j_min, j = self.getFitRegion()
+        result = model.fit(Ampl_data[j_min:j], params, B=H_data[j_min:j])
+        print(result.fit_report())
+
 
     def first_guess(self, fit_range: tuple, exceptions: list) -> list:
         # Iterate over all spectras and extract approx parameters, to use as initial starting points for lineshape 1
