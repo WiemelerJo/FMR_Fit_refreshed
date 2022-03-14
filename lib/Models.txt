@@ -3,7 +3,7 @@ Args: slope, offset
 Bounds: (-Nan,Nan), (-Nan,Nan)
 StepSize: 0.1, 0.1
 InitVals: 0.5, 1.0
-Function: slope * B + offset
+Function: slope*B+offset
 /End
 
 #Lorentz

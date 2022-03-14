@@ -34,6 +34,7 @@ class MyForm(QMainWindow):
 
         self.pushButton.clicked.connect(self.test)
         self.Button_Fit.clicked.connect(self.makeFit)
+        #self.Button_dropped_points.clicked.connect()
 
         self.func_number = 1
         self.func_removed = []
@@ -45,8 +46,9 @@ class MyForm(QMainWindow):
 
 
     def test(self, *args, **kwargs):
+        self.setValuesForTree()
         #self.getValuesFromTree()
-        self.plotFitData()
+        #self.plotFitData()
         #print(self.Models.MODELS.get('Lorentz'))
         #print(self.paramsLUT.get(self.i).get('params'))
         #for name in self.paramsLUT.get(self.i).get('params'):
@@ -59,7 +61,9 @@ class MyForm(QMainWindow):
         # In future this could also be Frequency
         self.i = spectra
         self.plot()
-        self.plotFitData()
+        self.setValuesForTree()
+
+        #self.plotFitData()
 
     def populate_combobox(self):
         # Get all possible function from Models.txt, get their names and add them as items in combobox
@@ -153,6 +157,8 @@ class MyForm(QMainWindow):
         self.plotFitData()
 
     def dbs_value(self, *args):
+        print('activ')
+        pass
         self.getValuesFromTree()
         self.plotFitData()
         #self.plot()
@@ -170,6 +176,32 @@ class MyForm(QMainWindow):
             self.paramsLUT[self.i]['params'] = None
         except AttributeError:
             self.openFileDialog()
+
+    def setValuesForTree(self):
+        root = self.Parameter_tree.invisibleRootItem()
+        child_count = root.childCount()
+        params = self.paramsLUT.get(self.i).get('params')
+        if params == None or params == False:
+            return
+
+        for i in range(child_count):
+            item = root.child(i)
+            func = item.text(0).split(" ")
+            func_name = func[0]
+            func_index = func[1]
+
+            for n in range(item.childCount()):
+                widget = item.child(n)
+                param_name = widget.text(0).replace(" ", "") + func_index
+                arg = params.get(param_name)
+
+                dbs_val = self.Parameter_tree.itemWidget(widget, 1)
+                dbs_val.setValue(arg.value)
+                dbs_min = self.Parameter_tree.itemWidget(widget, 2)
+                dbs_min.setValue(arg.min)
+                dbs_max = self.Parameter_tree.itemWidget(widget, 3)
+                dbs_max.setValue(arg.max)
+        self.plotFitData()
 
     def getValuesFromTree(self):
         # Reads the spin box values and saves them into self.paramsLUT
@@ -225,7 +257,6 @@ class MyForm(QMainWindow):
         func = self.Models.getModelFunc(names, self.i)
         # func[0] is the function string, func[1] is its reference, func[2] is func_args
         exec(func[0], globals()) # Create function
-        print(func[0])
 
         # with func[1] create lfmit Model()
         fit_model = Model(globals().get(func[1]))
@@ -296,16 +327,13 @@ class MyForm(QMainWindow):
     def plotFitData(self):
         # Plot the fitted data + individual functions
         # This needs to be called for every change
+        #self.getValuesFromTree()
         data = self.paramsLUT.get(self.i)
         H_data = data.get('Field')
         Ampl_data = data.get('Ampl')
-
-        # j_min, j = self.getFitRegion()
         params = data.get('params')
-        if params == None:
-            # No fit to plot, so end call here
-            self.getValuesFromTree()
-        elif params == False:
+
+        if params == False:
             # This means self.i is in exceptions and should not be plotted/fitted
             return
         # evaluate the fit model with given parameters params then plot
@@ -362,8 +390,9 @@ class MyForm(QMainWindow):
 
         j_min, j = self.getFitRegion()
         result = model.fit(Ampl_data[j_min:j], params, B=H_data[j_min:j])
-        print(result.fit_report())
 
+        data['params'] = result.params
+        self.setValuesForTree()
 
     def first_guess(self, fit_range: tuple, exceptions: list) -> list:
         # Iterate over all spectras and extract approx parameters, to use as initial starting points for lineshape 1

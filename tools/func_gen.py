@@ -70,7 +70,7 @@ class Fit_Models():
                     bounds_raw = line[8:-1].split(", ")
                     bounds = []
                     for tpl in bounds_raw:
-                        big = "9999999999"
+                        big = "999999"
                         tpl = eval(tpl.replace('Nan', big).replace('nan', big).replace('NaN', big).replace('NAN', big))
                         bounds.append(tpl)
                     model["bounds"] = bounds
