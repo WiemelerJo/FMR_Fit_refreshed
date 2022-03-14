@@ -1,3 +1,11 @@
+#Linear
+Args: slope, offset
+Bounds: (-Nan,Nan), (-Nan,Nan)
+StepSize: 0.1, 0.1
+InitVals: 0.5, 1.0
+Function: slope * B + offset
+/End
+
 #Lorentz
 Args: dB, R, A
 Bounds: (0,1.5), (0,2.5), (0,Nan)
