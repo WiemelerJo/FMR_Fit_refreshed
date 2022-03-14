@@ -78,7 +78,11 @@ class MyForm(QMainWindow):
         root = tree.invisibleRootItem()
         for item in tree.selectedItems():
             name = item.text(0)
-            index = name.split(" ")[1]
+            try:
+                index = name.split(" ")[1]
+            except IndexError:
+                name = item.parent().text(0)
+                index = name.split(" ")[1]
             self.func_removed.append(index)
             root.removeChild(item)
             root.removeChild(item.parent())
@@ -127,8 +131,15 @@ class MyForm(QMainWindow):
 
                 tree.setItemWidget(child, col + 1, dbs)
 
+        #Refresh plot
+        self.getValuesFromTree()
+        self.plotFitData()
+
     def dbs_value(self, *args):
-        print(args)
+        self.getValuesFromTree()
+        self.plotFitData()
+        #self.plot()
+        #print(args)
 
     def dbs_bound_min(self, *args, **kwargs):
         print(args, kwargs)
@@ -168,7 +179,7 @@ class MyForm(QMainWindow):
             func_name = func[0]
             func_index = func[1]
 
-            for n in range(3):
+            for n in range(item.childCount()):
                 widget = item.child(n)
                 param_name = widget.text(0).replace(" ", "") + func_index
 
@@ -262,29 +273,57 @@ class MyForm(QMainWindow):
                                  'models': None, 'params': None}
         # because data hasn't been fited yet keys: models, params are empty
 
+    def plotFitData(self):
+        # Plot the fitted data + individual functions
+        # This needs to be called for every change
+
+        data = self.paramsLUT.get(self.i)
+        H_data = data.get('Field')
+        Ampl_data = data.get('Ampl')
+
+        # j_min, j = self.getFitRegion()
+        params = data.get('params')
+
+        # evaluate the fit model with given parameters params then plot
+        fitted_data = data.get('models').eval(params=params, B=H_data)
+
+        pen_result = pg.mkPen((255, 0, 0), width=3)
+        self.pltFitData.setData(H_data, fitted_data, name='Result', pen=pen_result)
+        self.pltFitDataRange.setData(H_data, fitted_data, name='Result', pen=pen_result)
+
+
     def plot(self):
+        # Plot the Background/Experiment
+        # This only needs to be called once, every spectra change
+        # First Plot Background, then prepare plot for fit data
         data = self.paramsLUT.get(self.i)
         H_data = data.get('Field')
         Ampl_data = data.get('Ampl')
 
         #j_min, j = self.getFitRegion()
-        self.Plot_Indi_View.plt.clear()  # Delete previous data
-        self.Plot_Indi_View.plt_range.clear() # Delete previous data
+        view = self.Plot_Indi_View
+        view_range = self.Plot_Indi_View
 
-        self.Plot_Indi_View.plt.plot(H_data, Ampl_data, name='Experiment', pen=(255, 255, 255))  # Plot Experiment data
-        self.Plot_Indi_View.plt_range.plot(H_data, Ampl_data, pen=(255, 255, 255))
+        view.plt.clear()  # Delete previous data
+        view_range.plt_range.clear() # Delete previous data
 
-        self.Plot_Indi_View.plt.addItem(self.Plot_Indi_View.lr)  # Plot Linear Range Select Item
-        self.Plot_Indi_View.plt.addItem(self.Plot_Indi_View.label, ignoreBounds=True)
+        view.plt.plot(H_data, Ampl_data, name='Experiment', pen=(255, 255, 255))  # Plot Experiment data
+        view_range.plt_range.plot(H_data, Ampl_data, pen=(255, 255, 255))
+
+        view.plt.addItem(view.lr)  # Plot Linear Range Select Item
+        view.plt.addItem(view.label, ignoreBounds=True)
 
         params = data.get('params')
 
         if params == None or params == False:
             # No fit to plot, so end call here
-            return
+            self.getValuesFromTree()
+            #return
 
-        # Now get the values out of lmfit Parameter object
-
+        # Prepare plots for fit data
+        self.pltFitData = view.plt.plot()
+        self.pltFitDataRange = view_range.plt_range.plot()
+        self.plotFitData()
 
     def first_guess(self, fit_range: tuple, exceptions: list) -> list:
         # Iterate over all spectras and extract approx parameters, to use as initial starting points for lineshape 1
