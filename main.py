@@ -19,6 +19,8 @@ from lmfit import Model, Parameters
 
 from typing import List, Set, Dict, Tuple, Optional
 
+#Todo: Implement to be able to have different configuration of models per spectra in a dependence
+
 class MyForm(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -103,6 +105,8 @@ class MyForm(QMainWindow):
             self.func_removed.append(index)
             root.removeChild(item)
             root.removeChild(item.parent())
+        self.getValuesFromTree()
+        self.plotFitData()
 
     def populate_tree(self, func_name: str, number: int):
         # Create treewidgetitem with name: func_name {number}
@@ -157,8 +161,6 @@ class MyForm(QMainWindow):
         self.plotFitData()
 
     def dbs_value(self, *args):
-        print('activ')
-        pass
         self.getValuesFromTree()
         self.plotFitData()
         #self.plot()

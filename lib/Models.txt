@@ -37,7 +37,7 @@ Function: (4*A*dB**2*(3*alpha*dB-4*alpha*(B-R)**2-8*m.sqrt(3)*dB*(B-R)))/(m.sqrt
 
 #Dyson-Unrestricted
 Args: alpha, dB, R, A
-Bounds: (Nan,Nan), (0,1.5), (0,2.5), (0,Nan)
+Bounds: (-Nan,Nan), (0,1.5), (0,2.5), (0,Nan)
 StepSize: 0.001, 0.001, 0.001, 0.1
 InitVals: 0.0, 0.005, 0.07, 1.5
 Function: (4*A*dB**2*(3*alpha*dB-4*alpha*(B-R)**2-8*m.sqrt(3)*dB*(B-R)))/(m.sqrt(3)*(4*(B-R)**2+3*dB**2)**2)
@@ -45,7 +45,7 @@ Function: (4*A*dB**2*(3*alpha*dB-4*alpha*(B-R)**2-8*m.sqrt(3)*dB*(B-R)))/(m.sqrt
 
 #Complex-Lorentz
 Args: dBpp, Br, A, phi
-Bounds: (0,1.5), (0,2.5), (0,Nan), (Nan,Nan)
+Bounds: (0,1.5), (0,2.5), (0,Nan), (-Nan,Nan)
 StepSize: 0.001, 0.001, 0.1, 0.001
 InitVals: 0.005, 0.0, 1.5, 0.0
 Function: A*(m.sin(phi)*(0.75*dBpp**2+(B-Br)**2)-2*(m.sqrt(3)/2*dBpp*m.cos(phi)+(B-Br)*m.sin(phi))*(B-Br))/(0.75*dBpp**2+(B-Br)**2)**2
