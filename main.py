@@ -53,17 +53,22 @@ class MyForm(QMainWindow):
         #print(self.paramsLUT.get(self.i).get('params').get('A1'))
 
     def changeSpectra(self, spectra: int):
+        # Change measured spectra
+        # For now this is equal to an angle change
+        # In future this could also be Frequency
         self.i = spectra
         self.plot()
         self.plotFitData()
 
     def populate_combobox(self):
+        # Get all possible function from Models.txt, get their names and add them as items in combobox
         self.Models = Fit_Models()
         self.comboBox_fit_model.addItems(list(self.Models.MODELS.keys()))
 
     def add_func(self):
         self.resetCurrentParamLUTentry()
         # Get func name from combobox and add it to self.funcs
+        # Prefere removed index over new index
         name = self.comboBox_fit_model.currentText()
         #self.funcs.append(name)
         number = self.func_number
@@ -79,6 +84,8 @@ class MyForm(QMainWindow):
     def remove_func(self):
         self.resetCurrentParamLUTentry()
         # Get selected Item/Function to remove
+        # identify its index and add it to func_remove list
+        # this removed index will then be prefered while adding
         tree = self.Parameter_tree
         root = tree.invisibleRootItem()
         for item in tree.selectedItems():
@@ -93,6 +100,10 @@ class MyForm(QMainWindow):
             root.removeChild(item.parent())
 
     def populate_tree(self, func_name: str, number: int):
+        # Create treewidgetitem with name: func_name {number}
+        # Add every Parameter as Child, with 3 QDoubleSpinbox for Value, Min, Max
+        # Make every Branch/(Parent/Child) checkable to check fit usage
+
         tree = self.Parameter_tree
 
         Model = self.Models.MODELS.get(func_name)
