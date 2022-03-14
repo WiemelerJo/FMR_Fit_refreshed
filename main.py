@@ -43,7 +43,10 @@ class MyForm(QMainWindow):
     def test(self, *args, **kwargs):
         self.getValuesFromTree()
         #print(self.Models.MODELS.get('Lorentz'))
-        print(self.paramsLUT.get(self.i).get('params'))
+        #print(self.paramsLUT.get(self.i).get('params'))
+        #for name in self.paramsLUT.get(self.i).get('params'):
+        #    print(name)
+        #print(self.paramsLUT.get(self.i).get('params').get('A1'))
 
     def changeSpectra(self, spectra: int):
         self.i = spectra
@@ -143,41 +146,53 @@ class MyForm(QMainWindow):
     def getValuesFromTree(self):
         # Reads the spin box values and saves them into self.paramsLUT
         # If Spectra self.i hasnt been initiated yet, call self.setupParamaters()
-
         root = self.Parameter_tree.invisibleRootItem()
         child_count = root.childCount()
-        #print(self.Parameter_tree.columnCount())
         funcNames = []
-        models = {}
+
+        # get the names
         for i in range(child_count):
             item = root.child(i)
             name = item.text(0) #.split(" ")[0]
             funcNames.append(name)
-            params = {}
+
+        # Check if spectra has been init yet
+        if self.paramsLUT[self.i]['params'] == None:
+            self.setupParameters(funcNames)
+
+        # get spinbox values
+        params = {}
+        for i in range(child_count):
+            item = root.child(i)
+            func = item.text(0).split(" ")
+            func_name = func[0]
+            func_index = func[1]
+
             for n in range(3):
                 widget = item.child(n)
-                param_name = widget.text(0)
+                param_name = widget.text(0).replace(" ", "") + func_index
 
                 dbs_val = self.Parameter_tree.itemWidget(widget, 1)
                 dbs_min = self.Parameter_tree.itemWidget(widget, 2)
                 dbs_max = self.Parameter_tree.itemWidget(widget, 3)
 
-                params[param_name] = {'value': dbs_val.value(), 'state': widget.checkState(0)}
+                params[param_name] = {'value': dbs_val.value(), 'state': bool(widget.checkState(0)),
+                                      'min': dbs_min.value(),
+                                      'max': dbs_max.value()}
 
-            models[name] = params
-        # models is dict(  names: dict( value: float, state: int )    )
-        if self.paramsLUT[self.i]['params'] == None:
-            self.setupParameters(models)
+        LUTparams = self.paramsLUT.get(self.i).get('params')
+        for name in LUTparams:
+            arg = params.get(name)
+            LUTparams[name].value = arg.get("value")
+            LUTparams[name].min = arg.get("min")
+            LUTparams[name].max = arg.get("max")
+            LUTparams[name].vary = arg.get("state")
 
-    def setupParameters(self, models: dict):
+    def setupParameters(self, names: dict):
         # Called for "None" entry in paramsLUT
         # Create an lmfit Model using function names present in tree, then make lmfit Params out of this
 
-        LUT = dict()
-        Names = []
-        for funcName in models:
-            Names.append(funcName)
-        func = self.Models.getModelFunc(Names, self.i)
+        func = self.Models.getModelFunc(names, self.i)
         # func[0] is the function string, func[1] is its reference, func[2] is func_args
         exec(func[0], globals()) # Create function
 
@@ -188,12 +203,7 @@ class MyForm(QMainWindow):
         self.paramsLUT[self.i]['models'] = fit_model
         self.paramsLUT[self.i]['params'] = params
 
-
         #print(eval(test[1] + "(1, 2, 3, 4)"))
-
-
-
-
 
     def openFileDialog(self):
         fname = QFileDialog.getOpenFileName(self, 'Open file', '/home', 'Converted Files (*.txt *.dat *.asc) ;;'
