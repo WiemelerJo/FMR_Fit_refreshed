@@ -15,6 +15,10 @@ from lib.CustomWidgets import *
 from lib.Fitting import *
 from tools.func_gen import Fit_Models
 
+from lmfit import Model, Parameters
+
+from typing import List, Set, Dict, Tuple, Optional
+
 class MyForm(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -37,7 +41,9 @@ class MyForm(QMainWindow):
 
 
     def test(self, *args, **kwargs):
-        print(self.Models.MODELS.get('Lorentz'))
+        self.getValuesFromTree()
+        #print(self.Models.MODELS.get('Lorentz'))
+        print(self.paramsLUT.get(self.i).get('params'))
 
     def changeSpectra(self, spectra: int):
         self.i = spectra
@@ -48,6 +54,7 @@ class MyForm(QMainWindow):
         self.comboBox_fit_model.addItems(list(self.Models.MODELS.keys()))
 
     def add_func(self):
+        self.resetCurrentParamLUTentry()
         # Get func name from combobox and add it to self.funcs
         name = self.comboBox_fit_model.currentText()
         #self.funcs.append(name)
@@ -62,6 +69,7 @@ class MyForm(QMainWindow):
         self.populate_tree(name, number)
 
     def remove_func(self):
+        self.resetCurrentParamLUTentry()
         # Get selected Item/Function to remove
         tree = self.Parameter_tree
         root = tree.invisibleRootItem()
@@ -124,6 +132,68 @@ class MyForm(QMainWindow):
 
     def dbs_bound_max(self, *args):
         print(args)
+
+    def resetCurrentParamLUTentry(self):
+        try:
+            self.paramsLUT[self.i]['models'] = None
+            self.paramsLUT[self.i]['params'] = None
+        except AttributeError:
+            self.openFileDialog()
+
+    def getValuesFromTree(self):
+        # Reads the spin box values and saves them into self.paramsLUT
+        # If Spectra self.i hasnt been initiated yet, call self.setupParamaters()
+
+        root = self.Parameter_tree.invisibleRootItem()
+        child_count = root.childCount()
+        #print(self.Parameter_tree.columnCount())
+        funcNames = []
+        models = {}
+        for i in range(child_count):
+            item = root.child(i)
+            name = item.text(0) #.split(" ")[0]
+            funcNames.append(name)
+            params = {}
+            for n in range(3):
+                widget = item.child(n)
+                param_name = widget.text(0)
+
+                dbs_val = self.Parameter_tree.itemWidget(widget, 1)
+                dbs_min = self.Parameter_tree.itemWidget(widget, 2)
+                dbs_max = self.Parameter_tree.itemWidget(widget, 3)
+
+                params[param_name] = {'value': dbs_val.value(), 'state': widget.checkState(0)}
+
+            models[name] = params
+        # models is dict(  names: dict( value: float, state: int )    )
+        if self.paramsLUT[self.i]['params'] == None:
+            self.setupParameters(models)
+
+    def setupParameters(self, models: dict):
+        # Called for "None" entry in paramsLUT
+        # Create an lmfit Model using function names present in tree, then make lmfit Params out of this
+
+        LUT = dict()
+        Names = []
+        for funcName in models:
+            Names.append(funcName)
+        func = self.Models.getModelFunc(Names, self.i)
+        # func[0] is the function string, func[1] is its reference, func[2] is func_args
+        exec(func[0], globals()) # Create function
+
+        # with func[1] create lfmit Model()
+        fit_model = Model(globals().get(func[1]))
+        params = fit_model.make_params()
+
+        self.paramsLUT[self.i]['models'] = fit_model
+        self.paramsLUT[self.i]['params'] = params
+
+
+        #print(eval(test[1] + "(1, 2, 3, 4)"))
+
+
+
+
 
     def openFileDialog(self):
         fname = QFileDialog.getOpenFileName(self, 'Open file', '/home', 'Converted Files (*.txt *.dat *.asc) ;;'

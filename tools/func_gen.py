@@ -3,6 +3,7 @@
 # into a python function and in the end into a model for fitting using lmfit
 import math as m
 from asteval import asteval
+from typing import List
 
 class Gen_Lorentz():
     def __init__(self,fit_num):
@@ -106,6 +107,30 @@ class Fit_Models():
 
         self.MODELS = MODELS
 
+    def getModelFunc(self, models: List[str], spectra: int) -> List[str]:
+        # From models list extract model names plus index number , eg. "Lorentz 1" + "Dyson 2" ....
+        # Then get their func_fmt and format {} to index number.
+        # Finally sum up all func_fmt and wrap it in a python function called  modelFitFunc_{}.format(self.i)
+        # exec str to create global function
+        # Return func name/reference
+
+        func_args = str()  # Set empty str
+        func_body = str()  # Set empty str
+
+        for model in models:
+            model = model.split(" ") # From "Lorentz 1" get ["Lorentz", "1"]
+            name = model[0]
+            index = model[1]
+
+            func = self.MODELS[name]
+            func_args += func['args_fmt'].format(index)
+            func_body += '+' + func['func_fmt'].format(index)
+
+        func = "def modelFitFunc_{0}(B{1}):\n\treturn({2})".format(spectra, func_args, func_body)
+        return func, "modelFitFunc_{}".format(spectra), func_args
+        #exec(func, globals())
+        #return "modelFitFunc_{}".format(spectra)
+
     def get_str(self, Model:str , fit_num:int , use_linear:bool = True) -> str:
         #Create python function as a string for variable parameters
         str_func_args = str() # Set empty str
@@ -125,7 +150,7 @@ class Fit_Models():
         func = "def model_fit_func(B, slope, offset{0}):\n\treturn({1} + {2})".format(str_func_args,str_body,str_end)
         return func
 
-    def get_str_single(self, Model:str , fit_num:int , use_linear:bool = True) -> str:
+    def get_str_single(self, Model:str , use_linear:bool = False) -> str:
         #Create python function as a string for variable parameters
         str_func_args = str() # Set empty str
         str_body = str() # Set empty str
