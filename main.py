@@ -36,10 +36,12 @@ class MyForm(QMainWindow):
 
         self.pushButton.clicked.connect(self.test)
         self.Button_Fit.clicked.connect(self.makeFit)
-        #self.Button_dropped_points.clicked.connect()
+        self.Button_dropped_points.clicked.connect(self.dropCurrentSpectra)
+        self.Dropped_points_edit.editingFinished.connect(self.setExceptions)
 
         self.func_number = 1
         self.func_removed = []
+        self.exceptions = []
 
         self.pltView = self.Plot_Indi_View
         self.pltViewRange = self.Plot_Indi_View
@@ -56,6 +58,27 @@ class MyForm(QMainWindow):
         #for name in self.paramsLUT.get(self.i).get('params'):
         #    print(name)
         #print(self.paramsLUT.get(self.i).get('params').get('A1'))
+
+    def dropCurrentSpectra(self):
+        excep = self.getExceptions() # Get current exceptions
+        #excep = self.exceptions
+        excep.append(self.i) # Append current spectra index
+        text = ','.join(map(str, excep))
+        self.Dropped_points_edit.setText(str(text))
+        self.setExceptions()
+
+    def setExceptions(self):
+        self.exceptions = self.getExceptions()
+
+    def getExceptions(self) -> list:
+        # takes the string input from the exception text field inside the GUI and seperates the entries into a list
+        x = str(self.Dropped_points_edit.text())  # saves everything that is in the editLine as x
+        exceptions = []
+        if x == '':
+             return exceptions# if y is empty excep should also be empty
+
+        exceptions = list(map(int, x.split(',')))  # else set excep as everything that is standing in editLine
+        return exceptions
 
     def changeSpectra(self, spectra: int):
         # Change measured spectra
@@ -330,14 +353,14 @@ class MyForm(QMainWindow):
         # Plot the fitted data + individual functions
         # This needs to be called for every change
         #self.getValuesFromTree()
+        if self.i in self.exceptions:
+            return
+
         data = self.paramsLUT.get(self.i)
         H_data = data.get('Field')
         Ampl_data = data.get('Ampl')
         params = data.get('params')
 
-        if params == False:
-            # This means self.i is in exceptions and should not be plotted/fitted
-            return
         # evaluate the fit model with given parameters params then plot
         fitted_data = data.get('models').eval(params=params, B=H_data)
 
@@ -377,14 +400,15 @@ class MyForm(QMainWindow):
                int(float(region[1]) * self.H_ratio + self.H_offset)
 
     def makeFit(self):
+        if self.i in self.exceptions:
+            #  If true, self.i is in exeptions and should not be fitted
+            return
+
         # Take current spectra, params file and model entry to make a fit
         self.getValuesFromTree()
 
         data = self.paramsLUT.get(self.i)
         params = data.get('params')
-        if params == False:
-            #  If true, self.i is in exeptions and should not be fitted
-            return
 
         H_data = data.get('Field')
         Ampl_data = data.get('Ampl')
