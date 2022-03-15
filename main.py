@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import math as m
 import pyqtgraph as pg
+import json
 
 from PyQt5.QtWidgets import QMainWindow, QApplication,QFileDialog, QCheckBox, QLabel, QMessageBox, QShortcut,\
     QTreeWidgetItem, QDoubleSpinBox
@@ -15,7 +16,7 @@ from lib.CustomWidgets import *
 from lib.Fitting import *
 from tools.func_gen import Fit_Models
 
-from lmfit import Model, Parameters
+from lmfit import Model, Parameters, Parameter
 
 from typing import List, Set, Dict, Tuple, Optional
 
@@ -28,7 +29,7 @@ class MyForm(QMainWindow):
 
         # File Menu
         self.actionOpen.triggered.connect(self.openFileDialog)
-        #self.actionSave.triggered.connect(self.saveFileDialog)
+        self.actionSave.triggered.connect(self.saveFileDialog)
         #self.actionExit.triggered.connect(self.Exit)
 
         self.Button_add_function.clicked.connect(self.add_func)
@@ -50,7 +51,8 @@ class MyForm(QMainWindow):
 
 
     def test(self, *args, **kwargs):
-        self.setValuesForTree()
+        self.loadParameter()
+        #self.setValuesForTree()
         #self.getValuesFromTree()
         #self.plotFitData()
         #print(self.Models.MODELS.get('Lorentz'))
@@ -275,7 +277,7 @@ class MyForm(QMainWindow):
             LUTparams[name].max = arg.get("max")
             LUTparams[name].vary = arg.get("state")
 
-    def setupParameters(self, names: dict):
+    def setupParameters(self, names: list):
         # Called for "None" entry in paramsLUT
         # Create an lmfit Model using function names present in tree, then make lmfit Params out of this
 
@@ -287,10 +289,19 @@ class MyForm(QMainWindow):
         fit_model = Model(globals().get(func[1]))
         params = fit_model.make_params()
 
-        self.paramsLUT[self.i]['models'] = fit_model
+        self.paramsLUT[self.i]['models'] = [fit_model, names]
         self.paramsLUT[self.i]['params'] = params
 
         #print(eval(test[1] + "(1, 2, 3, 4)"))
+
+    def loadModels(self, names: list):
+        func = self.Models.getModelFunc(names, 0)
+        # func[0] is the function string, func[1] is its reference, func[2] is func_args
+        exec(func[0], globals())  # Create function
+
+        # with func[1] create lfmit Model()
+        fit_model = Model(globals().get(func[1]))
+        return fit_model, names
 
     def openFileDialog(self):
         fname = QFileDialog.getOpenFileName(self, 'Open file', '/home', 'Converted Files (*.txt *.dat *.asc) ;;'
@@ -312,27 +323,39 @@ class MyForm(QMainWindow):
             AmplData = np.split(df['Intensity []'].to_numpy(), chunksize)
             AngleData = np.split(df['Sample Angle [deg]'].to_numpy(), chunksize)
 
-            self.i = 0      # self.i is the variable defining which spectra is plotted
+            self.i = 0  # self.i is the variable defining which spectra is plotted
             self.i_min = 0
             self.i_max = chunksize
 
-            self.select_datanumber.setValue(self.i)
-            self.select_datanumber.setMinimum(self.i_min)
-            self.select_datanumber.setMaximum(self.i_max)
-            self.select_datanumber.valueChanged.connect(self.changeSpectra)
-
-            self.H_min = min(FieldData[0])
-            self.H_max = max(FieldData[0])
-            self.H_ratio = (counts)/(self.H_max - self.H_min)
-            self.H_offset = - self.H_ratio * self.H_min
-
-            self.Plot_Indi_View.lr.setBounds([self.H_min, self.H_max])  # Set Range Boundaries for linearregionitem
-            self.select_datanumber.setMaximum(self.i_max)
-            self.progressBar.setMaximum(self.i_max - 1)
-
             self.createLUT(AmplData, FieldData, AngleData)
+            self.setupLoadedData()
 
             self.plot()
+
+    def saveFileDialog(self):
+        self.saveParameter()
+
+    def setupLoadedData(self):
+        self.i = 0  # self.i is the variable defining which spectra is plotted
+        FieldData = self.paramsLUT[self.i].get('Field')
+        counts = max([x for x, v in self.paramsLUT.items()])
+        self.i_min = 0
+        self.i_max =counts
+
+        self.select_datanumber.setValue(self.i)
+        self.select_datanumber.setMinimum(self.i_min)
+        self.select_datanumber.setMaximum(self.i_max)
+        self.select_datanumber.valueChanged.connect(self.changeSpectra)
+
+        H_min = min(FieldData)
+        H_max = max(FieldData)
+        self.H_ratio = (len(FieldData)) / (H_max - H_min)
+        self.H_offset = - self.H_ratio * H_min
+
+        self.Plot_Indi_View.lr.setBounds([H_min, H_max])  # Set Range Boundaries for linearregionitem
+        self.select_datanumber.setMaximum(self.i_max)
+        self.progressBar.setMaximum(self.i_max - 1)
+
 
     def createLUT(self, AmplData: list, FieldData: list, AngleData: list):
         # Now create LUT to associate fit parameters to a given spectra
@@ -362,7 +385,7 @@ class MyForm(QMainWindow):
         params = data.get('params')
 
         # evaluate the fit model with given parameters params then plot
-        fitted_data = data.get('models').eval(params=params, B=H_data)
+        fitted_data = data.get('models')[0].eval(params=params, B=H_data)
 
         pen_result = pg.mkPen((255, 0, 0), width=3)
         self.pltFitData.setData(H_data, fitted_data, name='Result', pen=pen_result)
@@ -412,13 +435,76 @@ class MyForm(QMainWindow):
 
         H_data = data.get('Field')
         Ampl_data = data.get('Ampl')
-        model = data.get('models')
+        model = data.get('models')[0]
 
         j_min, j = self.getFitRegion()
         result = model.fit(Ampl_data[j_min:j], params, B=H_data[j_min:j])
 
         data['params'] = result.params
         self.setValuesForTree()
+
+    def loadParameter(self):
+        #data = self.paramsLUT
+        name = 'Test123'
+        filenameJSON = name + '.json'
+        filenameDAT = name + '.dat'
+        filepath = ''
+
+        with open(filepath + filenameJSON, 'r') as file:
+            self.paramsLoaded = json.load(file)
+
+        self.paramsLUT = {}
+        for key, val_loaded in self.paramsLoaded.items():
+            val = {}
+            Param = Parameters()
+            val['Ampl'] = val_loaded.get('Ampl')
+            val['Field'] = val_loaded.get('Field')
+            param = val_loaded.get('params')
+            if param == None:
+                val['params'] = None
+                val['models'] = None
+            else:
+                val['params'] = Param.loads(param)
+                names = val_loaded.get('models')
+                model = self.loadModels(names)
+                val['models'] = [model, names]
+
+            self.paramsLUT[int(key)] = val
+
+        #self.paramsLUT = {int(k): v for k, v in self.paramsLUT.items()} #Convert index i from str to int
+        self.setupLoadedData()
+        self.plot()
+
+
+    def saveParameter(self):
+        # Todo: save params as structured .dat file too
+        data = self.paramsLUT
+        name = 'Test123'
+        filenameJSON = name + '.json'
+        filenameDAT  = name + '.dat'
+        filepath = ''
+
+        with open(filepath + filenameJSON, 'w') as file:
+            dataToWrite = {}
+            for spectra in data:
+                dataToWrite[spectra] = {'Ampl': data[spectra].get('Ampl'),
+                                        'Field': data[spectra].get('Field'),
+                                        'params': None, 'models': None}
+                if spectra in self.exceptions:
+                    # Skip exceptions
+                    continue
+                models = data[spectra].get('models')
+                params = data[spectra].get('params')
+
+                if params == None:
+                    # Skip non fitted entries
+                    continue
+
+                dataToWrite[spectra]['params'] = params.dumps()
+                dataToWrite[spectra]['models'] = models[1]
+
+            json.dump(dataToWrite, file, cls=NumpyArrayEncoder)
+
 
     def first_guess(self, fit_range: tuple, exceptions: list) -> list:
         # Iterate over all spectras and extract approx parameters, to use as initial starting points for lineshape 1
@@ -480,6 +566,13 @@ class MyForm(QMainWindow):
                         break
                 line_index += 1
         return skip_value
+
+
+class NumpyArrayEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 if __name__=="__main__":
     #appctxt = ApplicationContext() #
