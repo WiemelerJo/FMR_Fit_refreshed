@@ -51,7 +51,9 @@ class MyForm(QMainWindow):
 
 
     def test(self, *args, **kwargs):
+        #self.clearTree()
         self.loadParameter()
+        #print(self.paramsLUT.get(self.i).get('models'))
         #self.setValuesForTree()
         #self.getValuesFromTree()
         #self.plotFitData()
@@ -205,10 +207,12 @@ class MyForm(QMainWindow):
             self.openFileDialog()
 
     def setValuesForTree(self):
+        print("Start")
         root = self.Parameter_tree.invisibleRootItem()
         child_count = root.childCount()
         params = self.paramsLUT.get(self.i).get('params')
         if params == None or params == False:
+            print("Exit")
             return
 
         for i in range(child_count):
@@ -228,6 +232,7 @@ class MyForm(QMainWindow):
                 dbs_min.setValue(arg.min)
                 dbs_max = self.Parameter_tree.itemWidget(widget, 3)
                 dbs_max.setValue(arg.max)
+        print("End")
         self.plotFitData()
 
     def getValuesFromTree(self):
@@ -301,7 +306,7 @@ class MyForm(QMainWindow):
 
         # with func[1] create lfmit Model()
         fit_model = Model(globals().get(func[1]))
-        return fit_model, names
+        return fit_model
 
     def openFileDialog(self):
         fname = QFileDialog.getOpenFileName(self, 'Open file', '/home', 'Converted Files (*.txt *.dat *.asc) ;;'
@@ -338,6 +343,8 @@ class MyForm(QMainWindow):
     def setupLoadedData(self):
         self.i = 0  # self.i is the variable defining which spectra is plotted
         FieldData = self.paramsLUT[self.i].get('Field')
+        # models = self.paramsLUT[self.i].get('models')
+
         counts = max([x for x, v in self.paramsLUT.items()])
         self.i_min = 0
         self.i_max =counts
@@ -356,6 +363,11 @@ class MyForm(QMainWindow):
         self.select_datanumber.setMaximum(self.i_max)
         self.progressBar.setMaximum(self.i_max - 1)
 
+        self.clearTree()
+
+    def clearTree(self):
+        self.Parameter_tree.clear()
+        self.func_number = 1
 
     def createLUT(self, AmplData: list, FieldData: list, AngleData: list):
         # Now create LUT to associate fit parameters to a given spectra
@@ -457,23 +469,32 @@ class MyForm(QMainWindow):
         for key, val_loaded in self.paramsLoaded.items():
             val = {}
             Param = Parameters()
-            val['Ampl'] = val_loaded.get('Ampl')
-            val['Field'] = val_loaded.get('Field')
+            val['Ampl'] = np.array(val_loaded.get('Ampl'))
+            val['Field'] = np.array(val_loaded.get('Field'))
             param = val_loaded.get('params')
             if param == None:
                 val['params'] = None
                 val['models'] = None
+                self.paramsLUT[int(key)] = val
+                self.setupLoadedData()
+                self.plot()
             else:
                 val['params'] = Param.loads(param)
-                names = val_loaded.get('models')
-                model = self.loadModels(names)
-                val['models'] = [model, names]
+                names_raw = val_loaded.get('models') # Is str(Name int)
+                model = self.loadModels(names_raw)
+                val['models'] = [model, names_raw]
+                self.paramsLUT[int(key)] = val
+                self.setupLoadedData()
+                self.plot()
 
-            self.paramsLUT[int(key)] = val
+                names = []
+                index = []
+                for entry in names_raw:
+                    model = entry.split(" ")
+                    self.populate_tree(model[0], model[1])
+
 
         #self.paramsLUT = {int(k): v for k, v in self.paramsLUT.items()} #Convert index i from str to int
-        self.setupLoadedData()
-        self.plot()
 
 
     def saveParameter(self):
