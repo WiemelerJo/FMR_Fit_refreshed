@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 from Spectra import Spectra
 from typing import List, Union
@@ -12,16 +13,72 @@ class Measurement(list):
 
     def __init__(self):
         super(Measurement, self).__init__()
+        self.FMR_type = 'angdep'  # Either angdep, or freqdep
+        self.anisotropy = dict()
+        self.damping = float()
+        self.g_factor = float()
+        self.magnetisation = float()
 
     def loadFitFile(self):
         # Load previously fitted and saved file
         self.clear()
-        print("Programier mich!")
+        raise NotImplementedError
 
-    def loadMeasurement(self):
+    @staticmethod
+    def checkHeader(path: str) -> int:
+        # Search the header and count unusable columns
+        with open(path, 'r') as f:
+            line_index = 1
+            no_header_cnt = 0
+            skip_value = 0
+            while True:
+                if line_index > 20 or no_header_cnt > 3:
+                    # If read more than 20 lines or found more than 3 line without letters, break loop
+                    break
+
+                temp_line = f.readline()
+
+                for i in temp_line:
+                    if i not in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '+', '\n', '.', ' ']:
+                        # Find character different from list and declare a possible found header for this line
+                        # print('Found possible Header', i, line_index)
+                        skip_value = line_index
+                        no_header_cnt = 0
+                        break
+                    elif i != ' ':  # Check if found data just a space, if not, then we have data.
+                        # If no_header_cnt is bigger than 3, we found the header.
+                        # skip_value then defines how many rows to skip
+                        # print(no_header_cnt, i)
+                        no_header_cnt += 1
+                        break
+                line_index += 1
+        return skip_value
+
+    def loadMeasurement(self, path: str):
         # Load new measurement from file
         self.clear()
-        print("Programier mich!")
+
+        if path[-3:] == 'DTA' or path[-3:] == 'par':
+            path = self.convert_bruker_to_ascii(path)
+
+        row_skip = self.checkHeader(path)
+        df = pd.read_csv(path, names=['index', 'Field [G]', 'Sample Angle [deg]', 'Intensity []']
+                         , skiprows=row_skip, sep='\s+')
+
+        counts = np.unique(df['Field [G]'].to_numpy()).shape[0]
+        # Counts is equivalent to the  number of Magnetic field steps in the measurement e.g. 1024,2048,4096....
+        chunksize = int(df.shape[0] / counts)  # Number of measurements with length counts
+
+        FieldData = np.split(np.true_divide(df['Field [G]'].to_numpy(), 10000), chunksize)
+        AmplData = np.split(df['Intensity []'].to_numpy(), chunksize)
+        AngleData = np.split(df['Sample Angle [deg]'].to_numpy(), chunksize)
+
+        for n in range(chunksize):
+            spec = Spectra(FieldData[n], AmplData[n], AngleData[n][0], n)
+            self.add(spec)
+
+    def convert_bruker_to_ascii(self, path):
+        raise NotImplementedError
 
     def add(self, spectra: Spectra):
         # Add spectra to existing Measurement object
@@ -86,12 +143,13 @@ class Measurement(list):
 
 if __name__ == '__main__':
     meas1 = Measurement()
-    test_spec = Spectra(np.arange(0, 4096, 1), np.arange(0, 4096, 1),
-                        'function_str', ['Lorentz 1', 'Dyson 2', 'Linear 3'], float(22), int(2000))
 
     for i in range(0, 360):
-        meas1.append(Spectra(np.arange(0, 4096, 1), np.arange(0, 4096, 1),
-                             'function_str', ['Lorentz 1', 'Dyson 2', 'Linear 3'], float(i), int(i)))
+        meas1.append(Spectra(np.arange(0, 4096, 1), np.arange(0, 4096, 1), float(i), int(i)))
+
+    print(len(meas1))
+    meas1.loadMeasurement(r"C:\Users\Jonas\Desktop\exp_data - Kopie - Kopie.dat")
+    print(len(meas1))
 
     # random.shuffle(meas1)
     # print(meas1(1 ,2, 3))

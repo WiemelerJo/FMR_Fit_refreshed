@@ -16,21 +16,35 @@ class Spectra:
 
     x_data: np.array
     y_data: np.array
-    function_str: str
-    model_names: List[str]
     angle: float
     spectra_index: int
+
+    function_str: str = field(init=False, repr=True)
+    model_names: list = field(init=False, repr=True)
     model: Model = field(init=False, repr=True)
     parameter: Parameters = field(init=False, repr=True)
     fitted: bool = False
     dropped: bool = False
 
+    def update_parameter(self):
+        raise NotImplementedError
+
+    def update_model(self):
+        raise NotImplementedError
+
+    def deg2rad(self):
+        raise NotImplementedError
+
     def __post_init__(self):
-        model = Fit_Models.getModelFunc(self.model_names, self.spectra_index)
-        exec(model[0], locals())
-        self.function_str = model[0]
-        self.model = Model(locals()[model[1]])
-        self.parameter = self.model.make_params()
+        if not isinstance(self.spectra_index, int):
+            raise TypeError("Parameter spectra_index has to be of type int")
+
+        if hasattr(self, 'model_names'):
+            model = Fit_Models.getModelFunc(self.model_names, self.spectra_index)
+            exec(model[0], locals())
+            self.function_str = model[0]
+            self.model = Model(locals()[model[1]])
+            self.parameter = self.model.make_params()
 
         self.sort_index = self.spectra_index
 
@@ -47,6 +61,5 @@ class Spectra:
 if __name__ == '__main__':
     measurement = []
     for i in range(0, 360):
-        measurement.append(Spectra(np.arange(0, 4096, 1), np.arange(0, 4096, 1),
-                                   'function_str', ['Lorentz 1', 'Dyson 2', 'Linear 3'], float(i), int(i)))
+        measurement.append(Spectra(np.arange(0, 4096, 1), np.arange(0, 4096, 1), float(i), int(i)))
     # print(min(measurement).angle)
