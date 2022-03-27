@@ -55,7 +55,8 @@ class MyForm(QMainWindow):
 
     def test(self, *args, **kwargs):
         #self.clearTree()
-        self.loadParameter()
+        self.saveParameter()
+        #self.loadParameter()
         #print(self.paramsLUT.get(self.i).get('models'))
         #self.setValuesForTree()
         #self.getValuesFromTree()
@@ -438,6 +439,7 @@ class MyForm(QMainWindow):
         self.setValuesForTree()
 
     def loadParameter(self):
+        raise NotImplementedError
         #data = self.paramsLUT
         name = 'Test123'
         filenameJSON = name + '.json'
@@ -480,34 +482,40 @@ class MyForm(QMainWindow):
 
 
     def saveParameter(self):
-        # Todo: save params as structured .dat file too
-        data = self.paramsLUT
-        name = 'Test123'
-        filenameJSON = name + '.json'
-        filenameDAT  = name + '.dat'
-        filepath = ''
+        options = QFileDialog.Options()
+        fileName, _ = QFileDialog.getSaveFileName(self, "Please select the file to save to", "",
+                                                  "Text Files (*.dat)", options=options)
+        if fileName and hasattr(self, 'Measurement'):
+            name = fileName[:-4]
 
-        with open(filepath + filenameJSON, 'w') as file:
-            dataToWrite = {}
-            for spectra in data:
-                dataToWrite[spectra] = {'Ampl': data[spectra].get('Ampl'),
-                                        'Field': data[spectra].get('Field'),
-                                        'params': None, 'models': None}
-                if spectra in self.exceptions:
-                    # Skip exceptions
-                    continue
-                models = data[spectra].get('models')
-                params = data[spectra].get('params')
+            filenameJSON = name + '.json'
+            filenameDAT  = name + '.dat'
 
-                if params == None:
-                    # Skip non fitted entries
-                    continue
+            with open(filenameJSON, 'w') as fileJSON, open(filenameDAT, 'w') as fileDAT:
+                dataToWrite = self.Measurement.dumps()
+                json.dump(dataToWrite, fileJSON)
 
-                dataToWrite[spectra]['params'] = params.dumps()
-                dataToWrite[spectra]['models'] = models[1]
+                func_str = "Functions:"
+                header = str() # Assume non changeing model for each spectra, to set param_names constant as a header
+                for spectra in self.Measurement:
+                    if spectra.parameter is not None:
+                        if header == "":  # If header is not init, create header string and write it to file
+                            func_str += str(spectra.model_names)
+                            fileDAT.write(func_str + "\n")
+                            if self.Measurement.FMR_type == "angdep":
+                                header = "Angle [deg]\t"
+                            else:
+                                header = "Frequency [GHz]\t"
 
-            json.dump(dataToWrite, file, cls=NumpyArrayEncoder)
+                            for name in spectra.parameter:
+                                header += str(name) + "\t"
+                            fileDAT.write(header + "\n")
 
+                        #  Create parameter strings and write them to the file
+                        line_2_write = str(spectra.angle) + "\t"
+                        for (key, val) in spectra.parameter.valuesdict().items():
+                            line_2_write += str(val) + "\t"
+                        fileDAT.write(line_2_write + "\n")
 
     def first_guess(self, fit_range: tuple, exceptions: list) -> list:
         # Iterate over all spectras and extract approx parameters, to use as initial starting points for lineshape 1
