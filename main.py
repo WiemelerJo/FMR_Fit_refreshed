@@ -14,6 +14,9 @@ from PyQt5.uic import loadUi
 
 from lib.CustomWidgets import *
 from lib.Fitting import *
+from lib.Measurement import Measurement
+#from lib.Spectra import Spectra
+
 from tools.func_gen import Fit_Models
 
 from lmfit import Model, Parameters, Parameter
@@ -98,6 +101,12 @@ class MyForm(QMainWindow):
         # Get all possible function from Models.txt, get their names and add them as items in combobox
         self.Models = Fit_Models()
         self.comboBox_fit_model.addItems(list(self.Models.MODELS.keys()))
+
+    def resetCurrentParamLUTentry(self):
+        try:
+            self.Measurement[self.i].parameter = None
+        except AttributeError:
+            self.openFileDialog()
 
     def add_func(self):
         self.resetCurrentParamLUTentry()
@@ -199,20 +208,22 @@ class MyForm(QMainWindow):
     def dbs_bound_max(self, *args):
         print(args)
 
-    def resetCurrentParamLUTentry(self):
-        try:
-            self.paramsLUT[self.i]['models'] = None
-            self.paramsLUT[self.i]['params'] = None
-        except AttributeError:
-            self.openFileDialog()
+    def block_spinbox_signal(self, block:bool, widget:QWidget):
+        # Temporarily block every signal from the Spinboxes. There is the Problem,
+        # that everytime the value from these spinboxes is changed a signal is emited.
+        # The bad thing now is, that there is no differentiation between user_event and machine_event,
+        # therefore if the script changes the values to display the next angle,
+        # the .connect() function will be called len(params) times, which has a min of 5 times with up to 42 times.
+
+        for n in range(1, 3 + 1):
+            dbs = self.Parameter_tree.itemWidget(widget, n)
+            dbs.blockSignals(block)
 
     def setValuesForTree(self):
-        print("Start")
         root = self.Parameter_tree.invisibleRootItem()
         child_count = root.childCount()
-        params = self.paramsLUT.get(self.i).get('params')
-        if params == None or params == False:
-            print("Exit")
+        parameter = self.Measurement[self.i].parameter
+        if parameter == None or parameter == False:
             return
 
         for i in range(child_count):
@@ -224,19 +235,21 @@ class MyForm(QMainWindow):
             for n in range(item.childCount()):
                 widget = item.child(n)
                 param_name = widget.text(0).replace(" ", "") + func_index
-                arg = params.get(param_name)
 
+                arg = self.Measurement[self.i].parameter[param_name]
+
+                self.block_spinbox_signal(True, widget)
                 dbs_val = self.Parameter_tree.itemWidget(widget, 1)
                 dbs_val.setValue(arg.value)
                 dbs_min = self.Parameter_tree.itemWidget(widget, 2)
                 dbs_min.setValue(arg.min)
                 dbs_max = self.Parameter_tree.itemWidget(widget, 3)
                 dbs_max.setValue(arg.max)
-        print("End")
+                self.block_spinbox_signal(False, widget)
         self.plotFitData()
 
     def getValuesFromTree(self):
-        # Reads the spin box values and saves them into self.paramsLUT
+        # Reads the spin box values and saves them into spectra.parameter
         # If Spectra self.i hasnt been initiated yet, call self.setupParamaters()
         root = self.Parameter_tree.invisibleRootItem()
         child_count = root.childCount()
@@ -251,7 +264,7 @@ class MyForm(QMainWindow):
             funcNames.append(name)
 
         # Check if spectra has been init yet
-        if self.paramsLUT[self.i]['params'] == None:
+        if self.Measurement[self.i].parameter == None:
             self.setupParameters(funcNames)
 
         # get spinbox values
@@ -274,7 +287,7 @@ class MyForm(QMainWindow):
                                       'min': dbs_min.value(),
                                       'max': dbs_max.value()}
 
-        LUTparams = self.paramsLUT.get(self.i).get('params')
+        LUTparams = self.Measurement[self.i].parameter
         for name in LUTparams:
             arg = params.get(name)
             LUTparams[name].value = arg.get("value")
@@ -283,7 +296,7 @@ class MyForm(QMainWindow):
             LUTparams[name].vary = arg.get("state")
 
     def setupParameters(self, names: list):
-        # Called for "None" entry in paramsLUT
+        # Called for NoneType entry in spectra.parameter
         # Create an lmfit Model using function names present in tree, then make lmfit Params out of this
 
         func = self.Models.getModelFunc(names, self.i)
@@ -294,10 +307,9 @@ class MyForm(QMainWindow):
         fit_model = Model(globals().get(func[1]))
         params = fit_model.make_params()
 
-        self.paramsLUT[self.i]['models'] = [fit_model, names]
-        self.paramsLUT[self.i]['params'] = params
-
-        #print(eval(test[1] + "(1, 2, 3, 4)"))
+        self.Measurement[self.i].model = fit_model
+        self.Measurement[self.i].model_names = names
+        self.Measurement[self.i].parameter = params
 
     def loadModels(self, names: list):
         func = self.Models.getModelFunc(names, 0)
@@ -316,23 +328,9 @@ class MyForm(QMainWindow):
             if fname[0][-3:] == 'DTA' or fname[0][-3:] == 'par':
                 fname[0] = self.convert_bruker_to_ascii(fname[0])
 
-            row_skip = self.checkHeader(fname[0])
-            df = pd.read_csv(fname[0], names=['index', 'Field [G]', 'Sample Angle [deg]', 'Intensity []']
-                             ,skiprows=row_skip, sep='\s+')
+            self.Measurement = Measurement()
+            self.Measurement.loadMeasurement(fname[0])
 
-            counts = np.unique(df['Field [G]'].to_numpy()).shape[0]
-            # Counts is equivalent to the  number of Magnetic field steps in the measurement e.g. 1024,2048,4096....
-            chunksize = int(df.shape[0] / counts)  # Number of measurements with length counts
-
-            FieldData = np.split(np.true_divide(df['Field [G]'].to_numpy(), 10000), chunksize)
-            AmplData = np.split(df['Intensity []'].to_numpy(), chunksize)
-            AngleData = np.split(df['Sample Angle [deg]'].to_numpy(), chunksize)
-
-            self.i = 0  # self.i is the variable defining which spectra is plotted
-            self.i_min = 0
-            self.i_max = chunksize
-
-            self.createLUT(AmplData, FieldData, AngleData)
             self.setupLoadedData()
 
             self.plot()
@@ -341,22 +339,20 @@ class MyForm(QMainWindow):
         self.saveParameter()
 
     def setupLoadedData(self):
-        self.i = 0  # self.i is the variable defining which spectra is plotted
-        FieldData = self.paramsLUT[self.i].get('Field')
-        # models = self.paramsLUT[self.i].get('models')
+        x_data = self.Measurement[0].x_data
 
-        counts = max([x for x, v in self.paramsLUT.items()])
+        self.i = 0  # self.i is the variable defining which spectra is plotted
         self.i_min = 0
-        self.i_max =counts
+        self.i_max = len(self.Measurement)
 
         self.select_datanumber.setValue(self.i)
         self.select_datanumber.setMinimum(self.i_min)
         self.select_datanumber.setMaximum(self.i_max)
         self.select_datanumber.valueChanged.connect(self.changeSpectra)
 
-        H_min = min(FieldData)
-        H_max = max(FieldData)
-        self.H_ratio = (len(FieldData)) / (H_max - H_min)
+        H_min = min(x_data)
+        H_max = max(x_data)
+        self.H_ratio = (len(x_data)) / (H_max - H_min)
         self.H_offset = - self.H_ratio * H_min
 
         self.Plot_Indi_View.lr.setBounds([H_min, H_max])  # Set Range Boundaries for linearregionitem
@@ -369,21 +365,6 @@ class MyForm(QMainWindow):
         self.Parameter_tree.clear()
         self.func_number = 1
 
-    def createLUT(self, AmplData: list, FieldData: list, AngleData: list):
-        # Now create LUT to associate fit parameters to a given spectra
-        # The idea is to use a dict() and profit of look up speed due to hashing
-
-        # { i: {Ampl: [amplitude data], Field: [field data], Angle: [angle data],
-        #   models: [Lorentz1, Dyson2, Lorentz3, ...],
-        #   params: [fitted params/values of Qdoublespinbox as lmfit Parameter object]
-        #   }   }
-
-        self.paramsLUT = {}
-        for i in range(self.i_min, self.i_max):
-            self.paramsLUT[i] = {'Ampl': AmplData[i],'Field': FieldData[i],'Angle': AngleData[i],
-                                 'models': None, 'params': None}
-        # because data hasn't been fited yet keys: models, params are empty
-
     def plotFitData(self):
         # Plot the fitted data + individual functions
         # This needs to be called for every change
@@ -391,13 +372,14 @@ class MyForm(QMainWindow):
         if self.i in self.exceptions:
             return
 
-        data = self.paramsLUT.get(self.i)
-        H_data = data.get('Field')
-        Ampl_data = data.get('Ampl')
-        params = data.get('params')
+        spectra = self.Measurement[self.i]
+        H_data = spectra.x_data
+        Ampl_data = spectra.y_data
+
+        params = spectra.parameter
 
         # evaluate the fit model with given parameters params then plot
-        fitted_data = data.get('models')[0].eval(params=params, B=H_data)
+        fitted_data = spectra.model.eval(params=params, B=H_data)
 
         pen_result = pg.mkPen((255, 0, 0), width=3)
         self.pltFitData.setData(H_data, fitted_data, name='Result', pen=pen_result)
@@ -407,9 +389,9 @@ class MyForm(QMainWindow):
         # Plot the Background/Experiment
         # This only needs to be called once, every spectra change
         # First Plot Background, then prepare plot for fit data
-        data = self.paramsLUT.get(self.i)
-        H_data = data.get('Field')
-        Ampl_data = data.get('Ampl')
+        spectra = self.Measurement[self.i]
+        H_data = spectra.x_data
+        Ampl_data = spectra.y_data
 
         #j_min, j = self.getFitRegion()
         view = self.pltView
@@ -442,17 +424,17 @@ class MyForm(QMainWindow):
         # Take current spectra, params file and model entry to make a fit
         self.getValuesFromTree()
 
-        data = self.paramsLUT.get(self.i)
-        params = data.get('params')
+        spectra = self.Measurement[self.i]
+        params = spectra.parameter
 
-        H_data = data.get('Field')
-        Ampl_data = data.get('Ampl')
-        model = data.get('models')[0]
+        H_data = spectra.x_data
+        Ampl_data = spectra.y_data
+        model = spectra.model
 
         j_min, j = self.getFitRegion()
         result = model.fit(Ampl_data[j_min:j], params, B=H_data[j_min:j])
 
-        data['params'] = result.params
+        spectra.parameter = result.params
         self.setValuesForTree()
 
     def loadParameter(self):

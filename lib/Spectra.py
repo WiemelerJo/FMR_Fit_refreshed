@@ -19,10 +19,10 @@ class Spectra:
     angle: float
     spectra_index: int
 
-    function_str: str = field(init=False, repr=True)
-    model_names: list = field(init=False, repr=True)
-    model: Model = field(init=False, repr=True)
-    parameter: Parameters = field(init=False, repr=True)
+    function_str: str | None = field(init=False, repr=True)
+    model_names: list | None = field(init=False, repr=True)
+    model: Model | None = field(init=False, repr=True)
+    parameter: Parameters | None = field(init=False, repr=True)
     fitted: bool = False
     dropped: bool = False
 
@@ -42,9 +42,15 @@ class Spectra:
         if hasattr(self, 'model_names'):
             model = Fit_Models.getModelFunc(self.model_names, self.spectra_index)
             exec(model[0], locals())
+
             self.function_str = model[0]
             self.model = Model(locals()[model[1]])
             self.parameter = self.model.make_params()
+        else:
+            self.function_str = None
+            self.parameter = None
+            self.model_names = None
+            self.model = None
 
         self.sort_index = self.spectra_index
 

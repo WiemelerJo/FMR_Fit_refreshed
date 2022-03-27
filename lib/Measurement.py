@@ -1,7 +1,10 @@
 import numpy as np
 import pandas as pd
 
-from Spectra import Spectra
+try:
+    from lib.Spectra import Spectra
+except ModuleNotFoundError:
+    from Spectra import Spectra
 from typing import List, Union
 
 
@@ -11,13 +14,13 @@ class Measurement(list):
     # or Measurement([int, int, int, ..]) of list int
     # __call__ will sort self before spitting out desired spectra
 
-    def __init__(self):
+    def __init__(self, FMR_type='angdep', anisotropy=None, damping=None, g_factor=None, magnetisation=None):
         super(Measurement, self).__init__()
-        self.FMR_type = 'angdep'  # Either angdep, or freqdep
-        self.anisotropy = dict()
-        self.damping = float()
-        self.g_factor = float()
-        self.magnetisation = float()
+        self.FMR_type = FMR_type  # Either angdep, or freqdep
+        self.anisotropy = anisotropy
+        self.damping = damping
+        self.g_factor = g_factor
+        self.magnetisation = magnetisation
 
     def loadFitFile(self):
         # Load previously fitted and saved file
