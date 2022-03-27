@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import pandas as pd
 
@@ -83,6 +85,14 @@ class Measurement(list):
     def convert_bruker_to_ascii(self, path):
         raise NotImplementedError
 
+    def dumps(self):
+        pre_dict = {'FMR_type': self.FMR_type, 'anisotropy': self.anisotropy, 'damping': self.damping,
+                    'g-factor': self.g_factor, 'magnetisation': self.magnetisation}
+
+        spectra_json = {spectra.spectra_index: spectra.dumps() for spectra in self}
+        dict_to_json = pre_dict | spectra_json
+        return json.dumps(dict_to_json)
+
     def add(self, spectra: Spectra):
         # Add spectra to existing Measurement object
         index = spectra.spectra_index
@@ -154,6 +164,7 @@ if __name__ == '__main__':
     meas1.loadMeasurement(r"C:\Users\Jonas\Desktop\exp_data - Kopie - Kopie.dat")
     print(len(meas1))
 
+    print(meas1.dumps())
     # random.shuffle(meas1)
     # print(meas1(1 ,2, 3))
     # print(max(meas1).spectra_index)

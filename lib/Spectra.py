@@ -1,4 +1,5 @@
 import numpy as np
+import json
 
 from lmfit import Parameters, Model
 from dataclasses import dataclass, asdict, field
@@ -35,6 +36,17 @@ class Spectra:
     def deg2rad(self):
         raise NotImplementedError
 
+    def dumps(self):
+        # Convert type Spectra in to representative JSON string
+        # Basically returns a smaller self.asdict() dictionary
+        dict_to_json = asdict(self)
+        dict_to_json.pop('model')
+        dict_to_json.pop('parameter')
+        if self.parameter is not None:
+            dict_to_json['parameter'] = self.parameter.dumps()
+
+        return json.dumps(dict_to_json, cls=NumpyArrayEncoder)
+
     def __post_init__(self):
         if not isinstance(self.spectra_index, int):
             raise TypeError("Parameter spectra_index has to be of type int")
@@ -62,6 +74,13 @@ class Spectra:
 
     def asdict(self):
         return asdict(self)
+
+
+class NumpyArrayEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 
 if __name__ == '__main__':
