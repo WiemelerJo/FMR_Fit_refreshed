@@ -157,6 +157,18 @@ class MyForm(QMainWindow):
         parent = QTreeWidgetItem(tree)
         parent.setText(0, func_name + ' {}'.format(number))
         parent.setFlags(parent.flags() | Qt.ItemIsTristate | Qt.ItemIsUserCheckable)
+        Val_list = Model.get('initVals')
+        Bounds = Model.get('bounds')
+        Stepsize_list = Model.get('stepSize')
+
+        spectra = self.Measurement[self.i]
+        j_min, j = self.getFitRegion()
+        R, dB, A = self.evaluate_min_max(spectra.x_data[j_min:j], spectra.y_data[j_min:j])
+
+        if func_name == 'Lorentz':
+            Val_list = [dB, R, A]
+        elif func_name == 'Dyson':
+            Val_list = [Val_list[0], dB, R, A]
 
         for index, param in enumerate(Model['args']):
             child = QTreeWidgetItem(parent)
@@ -164,18 +176,15 @@ class MyForm(QMainWindow):
             child.setText(0, param)
             child.setCheckState(0, Qt.Checked)
 
-            Stepsize_list = Model.get('stepSize')
             step = Stepsize_list[index]
             steps = [step, 10 * step, 10 * step]
 
-            Bounds = Model.get('bounds')
             min = Bounds[index][0]
             max = Bounds[index][1]
 
             boundsMin = [min, -2 * abs(max), -2 * abs(max)]
             boundsMax = [max, 2 * max, 2 * max]
 
-            Val_list = Model.get('initVals')
             val = Val_list[index]
             value = [val, min, max]
 
@@ -308,9 +317,10 @@ class MyForm(QMainWindow):
         fit_model = Model(globals().get(func[1]))
         params = fit_model.make_params()
 
-        self.Measurement[self.i].model = fit_model
-        self.Measurement[self.i].model_names = names
-        self.Measurement[self.i].parameter = params
+        spectra = self.Measurement[self.i]
+        spectra.model = fit_model
+        spectra.model_names = names
+        spectra.parameter = params
 
     def loadModels(self, names: list):
         func = self.Models.getModelFunc(names, 0)
@@ -478,9 +488,6 @@ class MyForm(QMainWindow):
                     self.populate_tree(model[0], model[1])
 
 
-        #self.paramsLUT = {int(k): v for k, v in self.paramsLUT.items()} #Convert index i from str to int
-
-
     def saveParameter(self):
         options = QFileDialog.Options()
         fileName, _ = QFileDialog.getSaveFileName(self, "Please select the file to save to", "",
@@ -540,7 +547,7 @@ class MyForm(QMainWindow):
         dB_PP = min_field - max_field
         Bres = min_field - dB_PP / 2 #Assuming a symmetric line
         Ampl = (abs(Adata[max_ampl_index]) + abs(Adata[min_ampl_index]))/2
-        self.ui.label_test.setText('Bres, dB_PP, Ampl: %.3f, %.3f, %.3f' % (Bres, dB_PP, Ampl))
+        self.label_test.setText('Bres, dB_PP, Ampl: %.3f, %.3f, %.3f' % (Bres, dB_PP, Ampl))
 
         return [Bres, dB_PP, Ampl]
 
