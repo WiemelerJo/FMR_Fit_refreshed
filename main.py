@@ -4,6 +4,7 @@ import numpy as np
 import math as m
 import pyqtgraph as pg
 import json
+import copy
 
 from PyQt5.QtWidgets import QMainWindow, QApplication,QFileDialog, QCheckBox, QLabel, QMessageBox, QShortcut,\
     QTreeWidgetItem, QDoubleSpinBox
@@ -395,6 +396,70 @@ class MyForm(QMainWindow):
         pen_result = pg.mkPen((255, 0, 0), width=3)
         self.pltFitData.setData(H_data, fitted_data, name='Result', pen=pen_result)
         self.pltFitDataRange.setData(H_data, fitted_data, name='Result', pen=pen_result)
+        self.plotIndivFuncs()
+
+    def plotIndivFuncs(self):
+        #  plot the individual functions used for the fit
+        spectra = self.Measurement[self.i]
+        j_min, j = self.getFitRegion()
+        MODELS = self.Models.MODELS
+        #print(MODELS.items())
+        if not hasattr(self, "indivPlots"):
+            #  Create LUT to store the individual plots
+            self.indivPlots = {}
+
+        plots = self.indivPlots.copy()
+        for func_raw in plots:
+            if func_raw not in spectra.model_names:
+                self.pltView.plt.removeItem(self.indivPlots[func_raw][0])
+                self.pltViewRange.plt_range.removeItem(self.indivPlots[func_raw][1])
+                self.indivPlots.pop(func_raw)
+
+        if len(spectra.model_names) > 1:
+
+            def func_value() -> np.array:
+                #  Eval func value of function name with index
+                function = MODELS.get(name).get('func_fmt').format(index) # String of the needed function
+                args = MODELS.get(name).get('args_fmt').format(index)
+                args = args[1:].replace(" ","").split(",")
+
+                local_B = np.zeros(spectra.x_data[j_min:j].shape)
+                for i, B in enumerate(spectra.x_data[j_min:j]):
+                    value = copy.copy(function)
+                    for arg in args:
+                        arg_val = params[arg].value
+                        value = value.replace(arg, str(arg_val))
+                    value = value.replace("B", str(B))
+                    local_B[i] = eval(value)
+                return local_B
+
+            params = spectra.parameter
+
+            for func_raw in spectra.model_names:
+                func = func_raw.split(' ')
+                name = func[0]
+                index = func[1]
+
+                if name == 'Linear':
+                    #  Ignore Linear Background
+                    continue
+
+                pen_fit = pg.mkPen(pg.intColor(index), width=3, style=Qt.DashLine)
+                func_values = func_value()
+
+                if func_raw not in self.indivPlots:
+                    plt_view = self.pltView.plt.plot(spectra.x_data[j_min:j], func_values,
+                                                     name=name + index, pen=pen_fit)
+                    plt_view_range = self.pltViewRange.plt_range.plot(spectra.x_data[j_min:j], func_values,
+                                                                 name=name + index, pen=pen_fit)
+                    self.indivPlots[func_raw] = [plt_view, plt_view_range]
+                else:
+                    self.indivPlots[func_raw][0].setData(spectra.x_data[j_min:j], func_values,
+                                                     name=name + index, pen=pen_fit)
+                    self.indivPlots[func_raw][1].setData(spectra.x_data[j_min:j], func_values,
+                                                                 name=name + index, pen=pen_fit)
+
+
 
     def plot(self):
         # Plot the Background/Experiment
@@ -486,7 +551,6 @@ class MyForm(QMainWindow):
                 for entry in names_raw:
                     model = entry.split(" ")
                     self.populate_tree(model[0], model[1])
-
 
     def saveParameter(self):
         options = QFileDialog.Options()
