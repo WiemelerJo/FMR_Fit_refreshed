@@ -51,12 +51,15 @@ class MyForm(QMainWindow):
         self.pltView = self.Plot_Indi_View
         self.pltViewRange = self.Plot_Indi_View
 
+        self.Models = Fit_Models()
+        self.genModelFunctions()
         self.populate_combobox()
 
 
     def test(self, *args, **kwargs):
+        print(Lorentz)
         #self.clearTree()
-        self.saveParameter()
+        #self.saveParameter()
         #self.loadParameter()
         #print(self.paramsLUT.get(self.i).get('models'))
         #self.setValuesForTree()
@@ -101,8 +104,16 @@ class MyForm(QMainWindow):
 
     def populate_combobox(self):
         # Get all possible function from Models.txt, get their names and add them as items in combobox
-        self.Models = Fit_Models()
         self.comboBox_fit_model.addItems(list(self.Models.MODELS.keys()))
+
+    def genModelFunctions(self):
+        # Will create functions named after the models in Models.txt, to easyily eval the func value for,
+        # for example the individual plots of the fits
+        for name in self.Models.MODELS.keys():
+            args = self.Models.MODELS.get(name).get("args_fmt").format("")[1:]
+            rtrn_stm = self.Models.MODELS.get(name).get("func")
+            func = "def {0}(B, {1}):\n\treturn {2}".format(name.replace("-","_"), args, rtrn_stm)
+            exec(func, globals())
 
     def resetCurrentParamLUTentry(self):
         try:
@@ -355,7 +366,7 @@ class MyForm(QMainWindow):
 
         self.i = 0  # self.i is the variable defining which spectra is plotted
         self.i_min = 0
-        self.i_max = len(self.Measurement)
+        self.i_max = len(self.Measurement) - 1
 
         self.select_datanumber.setValue(self.i)
         self.select_datanumber.setMinimum(self.i_min)
@@ -369,7 +380,7 @@ class MyForm(QMainWindow):
 
         self.Plot_Indi_View.lr.setBounds([H_min, H_max])  # Set Range Boundaries for linearregionitem
         self.select_datanumber.setMaximum(self.i_max)
-        self.progressBar.setMaximum(self.i_max - 1)
+        self.progressBar.setMaximum(self.i_max)
 
         self.clearTree()
 
@@ -416,23 +427,6 @@ class MyForm(QMainWindow):
                 self.indivPlots.pop(func_raw)
 
         if len(spectra.model_names) > 1:
-
-            def func_value() -> np.array:
-                #  Eval func value of function name with index
-                function = MODELS.get(name).get('func_fmt').format(index) # String of the needed function
-                args = MODELS.get(name).get('args_fmt').format(index)
-                args = args[1:].replace(" ","").split(",")
-
-                local_B = np.zeros(spectra.x_data[j_min:j].shape)
-                for i, B in enumerate(spectra.x_data[j_min:j]):
-                    value = copy.copy(function)
-                    for arg in args:
-                        arg_val = params[arg].value
-                        value = value.replace(arg, str(arg_val))
-                    value = value.replace("B", str(B))
-                    local_B[i] = eval(value)
-                return local_B
-
             params = spectra.parameter
 
             for func_raw in spectra.model_names:
@@ -445,20 +439,27 @@ class MyForm(QMainWindow):
                     continue
 
                 pen_fit = pg.mkPen(pg.intColor(index), width=3, style=Qt.DashLine)
-                func_values = func_value()
 
-                if func_raw not in self.indivPlots:
+                args = MODELS.get(name).get('args_fmt').format(index)
+                args = args[1:].replace(" ", "").split(",")
+                arg_val = "spectra.x_data[j_min:j]"
+                for arg in args:
+                    arg_val += ", " + str(params[arg].value)
+                func_values = eval("{0}({1})".format(name, arg_val))
+
+                if func_raw in self.indivPlots.keys():
+                    self.indivPlots[func_raw][0].clear()
+                    self.indivPlots[func_raw][0].setData(spectra.x_data[j_min:j], func_values,
+                                                       name=name + index, pen=pen_fit)
+                    self.indivPlots[func_raw][1].clear()
+                    self.indivPlots[func_raw][1].setData(spectra.x_data[j_min:j], func_values,
+                                                       name=name + index, pen=pen_fit)
+                else:
                     plt_view = self.pltView.plt.plot(spectra.x_data[j_min:j], func_values,
                                                      name=name + index, pen=pen_fit)
                     plt_view_range = self.pltViewRange.plt_range.plot(spectra.x_data[j_min:j], func_values,
                                                                  name=name + index, pen=pen_fit)
                     self.indivPlots[func_raw] = [plt_view, plt_view_range]
-                else:
-                    self.indivPlots[func_raw][0].setData(spectra.x_data[j_min:j], func_values,
-                                                     name=name + index, pen=pen_fit)
-                    self.indivPlots[func_raw][1].setData(spectra.x_data[j_min:j], func_values,
-                                                                 name=name + index, pen=pen_fit)
-
 
 
     def plot(self):
@@ -475,6 +476,7 @@ class MyForm(QMainWindow):
 
         view.plt.clear()  # Delete previous data
         view_range.plt_range.clear() # Delete previous data
+        self.indivPlots = {}
 
         view.plt.plot(H_data, Ampl_data, name='Experiment', pen=(255, 255, 255))  # Plot Experiment data
         view_range.plt_range.plot(H_data, Ampl_data, pen=(255, 255, 255))
@@ -493,25 +495,28 @@ class MyForm(QMainWindow):
                int(float(region[1]) * self.H_ratio + self.H_offset)
 
     def makeFit(self):
-        if self.i in self.exceptions:
-            #  If true, self.i is in exeptions and should not be fitted
-            return
+        try: #  Catch error, for fit while no data has been loaded
+            if self.i in self.exceptions:
+                #  If true, self.i is in exeptions and should not be fitted
+                return
 
-        # Take current spectra, params file and model entry to make a fit
-        self.getValuesFromTree()
+            # Take current spectra, params file and model entry to make a fit
+            self.getValuesFromTree()
 
-        spectra = self.Measurement[self.i]
-        params = spectra.parameter
+            spectra = self.Measurement[self.i]
+            params = spectra.parameter
 
-        H_data = spectra.x_data
-        Ampl_data = spectra.y_data
-        model = spectra.model
+            H_data = spectra.x_data
+            Ampl_data = spectra.y_data
+            model = spectra.model
 
-        j_min, j = self.getFitRegion()
-        result = model.fit(Ampl_data[j_min:j], params, B=H_data[j_min:j])
+            j_min, j = self.getFitRegion()
+            result = model.fit(Ampl_data[j_min:j], params, B=H_data[j_min:j])
 
-        spectra.parameter = result.params
-        self.setValuesForTree()
+            spectra.parameter = result.params
+            self.setValuesForTree()
+        except AttributeError:
+            self.openFileDialog()
 
     def loadParameter(self):
         raise NotImplementedError
